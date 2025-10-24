@@ -1,0 +1,105 @@
+#!/bin/bash
+
+set -euo pipefail
+
+IC_DEFAULT_IMAGE="ic_base:v0.1"
+NETWORK="${IC_NETWORK:-icy}"
+PREFIX="${IC_PREFIX:-ic}"
+IMAGE="${IC_IMAGE:-$IC_DEFAULT_IMAGE}"
+IC_KEY_PATH="/home/aban/lab/ic-workspace/ic_key"
+
+create_network() {
+    local NAME="$1"
+    docker network inspect "$NAME" >/dev/null 2>&1 || docker network create "$NAME"
+    echo "Network '$NAME' is ready."
+}
+
+provision_instance() {
+    local NAME="${PREFIX}-$1"
+    local NETWORK="$2"
+    docker run -dit --name "$NAME" --hostname "$1" --network "$NETWORK" "$IMAGE" sleep infinity
+    echo "Provisioned container '$NAME' on network '$NETWORK'."
+
+	echo "Preparing keys..."
+    docker exec "$NAME" mkdir -p /root/.ssh
+    docker cp "${IC_KEY_PATH}.pub" "$NAME":/root/.ssh/authorized_keys
+    docker cp "${IC_KEY_PATH}" "$NAME":/root/.ssh/id_rsa
+    docker exec "$NAME" chmod 700 /root/.ssh
+    docker exec "$NAME" chmod 600 /root/.ssh/authorized_keys
+    docker exec "$NAME" chown -R root:root /root/.ssh
+
+    # Start SSH daemon
+    echo "Starting SSH..."
+    docker exec -d "$NAME" mkdir -p /run/sshd
+    docker exec -d "$NAME" /usr/sbin/sshd -D
+}
+
+attach_instance() {
+    local NAME="${PREFIX}-$1"
+    docker exec -it "$NAME" bash
+}
+
+list_instances() {
+    docker ps --filter "name=${PREFIX}-" --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
+}
+
+destroy_all() {
+    echo "Destroying all containers with prefix '$PREFIX'..."
+    docker ps -aq --filter "name=${PREFIX}-" | xargs -r docker rm -f
+    echo "All containers destroyed."
+    destroy_network
+}
+
+destroy_instance() {
+    local NAME="${PREFIX}-$1"
+    docker rm -f "$NAME" >/dev/null 2>&1 && echo "Destroyed $NAME" || echo "$NAME not found."
+}
+
+destroy_network() {
+    docker network rm "$NETWORK" >/dev/null 2>&1 && echo "Network '$NETWORK' removed" || echo "Network '$NETWORK' not found."
+}
+
+# CLI parser
+case "$1" in
+    create-network)
+        create_network "$NETWORK"
+        ;;
+    provision)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 provision <id>"
+            exit 1
+        fi
+        create_network "$NETWORK"   # ensure network exists
+        for id in $2; do
+        	echo "==== Provisioning $id... ===="
+        	provision_instance "$id" "$NETWORK"
+        done
+        ;;
+    attach)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 attach <id>"
+            exit 1
+        fi
+        attach_instance "$2"
+        ;;
+    list)
+        list_instances
+        ;;
+    destroy)
+        if [ -z "$2" ]; then
+            echo "Usage: $0 destroy <id>"
+            exit 1
+        fi
+        destroy_instance "$2"
+        ;;
+    destroy-network)
+        destroy_network
+        ;;
+    destroy-all)
+        destroy_all
+        ;;
+    *)
+        echo "Usage: $0 {create-network|provision <id>|attach <id>|list|destroy <id>|destroy-network}"
+        exit 1
+        ;;
+esac
