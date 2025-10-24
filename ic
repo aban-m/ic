@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -euo pipefail
 
 IC_DEFAULT_IMAGE="ic_base:v0.2"
@@ -18,11 +17,12 @@ create_network() {
 provision_instance() {
     local NAME="${PREFIX}-$1"
     local NETWORK="$2"
-    docker run -dit --name "$NAME" --hostname "$1" "$IMAGE" sleep infinity
-    echo "Provisioned container '$NAME'."
 
+    echo "Running container..."
+    docker run -dit --name "$NAME" --hostname "$1" "$IMAGE" sleep infinity
+
+	echo "Connecting to network $NETWORK, alias $NETWORK."
     docker network connect --alias "$NETWORK" "$NETWORK" "$NAME"
-    echo "Connected to network."
     
 	echo "Preparing keys..."
     docker exec "$NAME" mkdir -p /root/.ssh
@@ -33,7 +33,7 @@ provision_instance() {
     docker exec "$NAME" chown -R root:root /root/.ssh
 
     # Start SSH daemon
-    echo "Starting SSH..."
+    echo "Starting SSH daemon..."
     docker exec -d "$NAME" mkdir -p /run/sshd
     docker exec -d "$NAME" /usr/sbin/sshd -D
 }
@@ -95,6 +95,14 @@ case "$1" in
         	provision_instance "$id" "$NETWORK"
         done
         ;;
+    run)
+    	container_ip "${PREFIX}-$2" >> /dev/null || {
+    		echo "Container not provisioned."
+    		provision_instance "$2" "$NETWORK"
+    	}
+    	attach_instance "$2"
+    	;;
+    	
     attach)
         if [ -z "$2" ]; then
             echo "Usage: $0 attach <id>"
