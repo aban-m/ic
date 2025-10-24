@@ -3,10 +3,11 @@
 set -euo pipefail
 
 IC_DEFAULT_IMAGE="ic_base:v0.1"
-NETWORK="${IC_NETWORK:-icy}"
+IC_KEY_PATH="/home/aban/lab/ic-workspace/secrets/ic_key"
+
+NETWORK="${IC_NETWORK:-ic}"
 PREFIX="${IC_PREFIX:-ic}"
 IMAGE="${IC_IMAGE:-$IC_DEFAULT_IMAGE}"
-IC_KEY_PATH="/home/aban/lab/ic-workspace/ic_key"
 
 create_network() {
     local NAME="$1"
@@ -40,7 +41,12 @@ attach_instance() {
 }
 
 list_instances() {
-    docker ps --filter "name=${PREFIX}-" --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
+    echo -e "NAME\tSTATUS\tIP"
+    for name in $(docker ps --filter "name=${PREFIX}-" --format "{{.Names}}"); do
+        ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name")
+        status=$(docker inspect -f '{{.State.Status}}' "$name")
+        echo -e "$name\t$status\t$ip"
+    done
 }
 
 destroy_all() {
@@ -57,6 +63,16 @@ destroy_instance() {
 
 destroy_network() {
     docker network rm "$NETWORK" >/dev/null 2>&1 && echo "Network '$NETWORK' removed" || echo "Network '$NETWORK' not found."
+}
+
+container_ip() {
+	NAME="${PREFIX}-$1"
+	docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$NAME"
+}
+
+container_ssh() {
+	IP=$(container_ip $1)
+	ssh -i "$IC_KEY_PATH" "root@$IP"
 }
 
 # CLI parser
@@ -98,6 +114,12 @@ case "$1" in
     destroy-all)
         destroy_all
         ;;
+    ssh)
+    	container_ssh "$2"
+    	;;
+    ip)
+    	container_ip "$2"
+    	;;
     *)
         echo "Usage: $0 {create-network|provision <id>|attach <id>|list|destroy <id>|destroy-network}"
         exit 1
