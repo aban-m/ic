@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-IC_DEFAULT_IMAGE="ic_base:v0.1"
+IC_DEFAULT_IMAGE="ic_base:v0.2"
 IC_KEY_PATH="/home/aban/lab/ic-workspace/secrets/ic_key"
 
 NETWORK="${IC_NETWORK:-ic}"
@@ -46,7 +46,7 @@ attach_instance() {
 list_instances() {
     echo -e "NAME\tSTATUS\tIP"
     for name in $(docker ps --filter "name=${PREFIX}-" --format "{{.Names}}"); do
-        ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name")
+    	ip=$(container_ip "$name")
         status=$(docker inspect -f '{{.State.Status}}' "$name")
         echo -e "$name\t$status\t$ip"
     done
@@ -69,12 +69,12 @@ destroy_network() {
 }
 
 container_ip() {
-	NAME="${PREFIX}-$1"
-	docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$NAME"
+	NAME="$1"
+	docker inspect -f '{{.NetworkSettings.Networks.ic.IPAddress}}' "$NAME"
 }
 
 container_ssh() {
-	IP=$(container_ip $1)
+	IP=$(container_ip "${PREFIX}-$1")
 	ssh -i "$IC_KEY_PATH" "root@$IP"
 }
 
@@ -89,7 +89,8 @@ case "$1" in
             exit 1
         fi
         create_network "$NETWORK"   # ensure network exists
-        for id in "$2"; do
+ 
+        for id in "${@:2}"; do
         	echo "==== Provisioning $id... ===="
         	provision_instance "$id" "$NETWORK"
         done
@@ -121,7 +122,7 @@ case "$1" in
     	container_ssh "$2"
     	;;
     ip)
-    	container_ip "$2"
+    	container_ip "${PREFIX}-$2"
     	;;
     *)
         echo "Usage: $0 {create-network|provision <id>|attach <id>|list|destroy <id>|destroy-network}"
