@@ -40,6 +40,7 @@ provision_instance() {
 
 attach_instance() {
     local NAME="${PREFIX}-$1"
+    docker start "$NAME"
     docker exec -it "$NAME" bash
 }
 
@@ -79,6 +80,10 @@ container_ssh() {
 }
 
 # CLI parser
+[ -z "${1-}" ] && {
+	list_instances
+	exit 0;
+}
 case "$1" in
     create-network)
         create_network "$NETWORK"
@@ -95,9 +100,16 @@ case "$1" in
         	provision_instance "$id" "$NETWORK"
         done
         ;;
-    run)
+    stop)
+    	docker stop "${PREFIX}-$2"
+    	;;
+    start)
+    	docker start "${PREFIX}-$2"
+    	;;
+    into)
     	container_ip "${PREFIX}-$2" >> /dev/null || {
     		echo "Container not provisioned."
+    		create_network "$NETWORK"
     		provision_instance "$2" "$NETWORK"
     	}
     	attach_instance "$2"
