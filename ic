@@ -18,9 +18,12 @@ create_network() {
 provision_instance() {
     local NAME="${PREFIX}-$1"
     local NETWORK="$2"
-    docker run -dit --name "$NAME" --hostname "$1" --network "$NETWORK" "$IMAGE" sleep infinity
-    echo "Provisioned container '$NAME' on network '$NETWORK'."
+    docker run -dit --name "$NAME" --hostname "$1" "$IMAGE" sleep infinity
+    echo "Provisioned container '$NAME'."
 
+    docker network connect --alias "$NETWORK" "$NETWORK" "$NAME"
+    echo "Connected to network."
+    
 	echo "Preparing keys..."
     docker exec "$NAME" mkdir -p /root/.ssh
     docker cp "${IC_KEY_PATH}.pub" "$NAME":/root/.ssh/authorized_keys
@@ -86,7 +89,7 @@ case "$1" in
             exit 1
         fi
         create_network "$NETWORK"   # ensure network exists
-        for id in $2; do
+        for id in "$2"; do
         	echo "==== Provisioning $id... ===="
         	provision_instance "$id" "$NETWORK"
         done
