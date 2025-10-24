@@ -4,6 +4,8 @@ set -euo pipefail
 IC_DEFAULT_IMAGE="ic_base:v0.2"
 IC_KEY_PATH="/home/aban/lab/ic-workspace/secrets/ic_key"
 
+PROVISION_ARGS="${PROVISION_ARGS:-}"
+
 NETWORK="${IC_NETWORK:-ic}"
 PREFIX="${IC_PREFIX:-ic}"
 IMAGE="${IC_IMAGE:-$IC_DEFAULT_IMAGE}"
@@ -19,7 +21,7 @@ provision_instance() {
     local NETWORK="$2"
 
     echo "Running container..."
-    docker run -dit --name "$NAME" --hostname "$1" "$IMAGE" sleep infinity
+    docker run -dit --name "$NAME" --hostname "$1" $PROVISION_ARGS "$IMAGE" sleep infinity
 
 	echo "Connecting to network $NETWORK, alias $NETWORK."
     docker network connect --alias "$NETWORK" "$NETWORK" "$NAME"

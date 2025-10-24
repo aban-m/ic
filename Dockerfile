@@ -9,7 +9,7 @@ RUN apt-get update && \
     apt-get clean
 
 # Set root password (for lab only!)
-RUN echo 'root:labpass' | chpasswd
+RUN echo 'root:root' | chpasswd
 
 EXPOSE 22
 
